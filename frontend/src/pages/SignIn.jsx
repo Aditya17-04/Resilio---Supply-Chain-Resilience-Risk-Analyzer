@@ -231,16 +231,6 @@ export default function SignIn() {
                             <p className="text-slate-400 text-sm mt-1">Sign in to your Resilio account</p>
                         </div>
 
-                        {/* Demo button */}
-                        <button
-                            type="button"
-                            onClick={handleDemo}
-                            className="w-full flex items-center justify-center gap-2 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/25 hover:border-blue-500/50 text-blue-300 rounded-xl py-2.5 text-sm font-medium transition-all duration-200 mb-5 group"
-                        >
-                            <Zap size={14} className="group-hover:text-blue-200" />
-                            Try Demo Login
-                        </button>
-
                         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                             <AuthInput
                                 id="email"
