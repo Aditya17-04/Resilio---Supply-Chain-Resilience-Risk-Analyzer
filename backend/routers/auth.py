@@ -51,6 +51,12 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 
+class GoogleLoginRequest(BaseModel):
+    email: str
+    name: str
+    picture: str = ""
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def hash_password(plain: str) -> str:
@@ -174,13 +180,33 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     return {"message": "Login successful.", "user": {"email": user.email, "name": user.name, "company": user.company}}
 
 
+@router.post("/google-login")
+def google_login(body: GoogleLoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email).first()
+    if user:
+        # Update name/picture if changed
+        user.name = body.name
+        db.commit()
+        db.refresh(user)
+    else:
+        user = User(
+            name=body.name,
+            email=body.email,
+            is_google=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return {"message": "Google login successful.", "user": {"email": user.email, "name": user.name, "company": user.company or ""}}
+
+
 @router.post("/forgot-password")
 def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
     if not SMTP_USER or not SMTP_PASSWORD:
         raise HTTPException(status_code=503, detail="Email service is not configured.")
     user = db.query(User).filter(User.email == body.email).first()
     # Always return success to prevent email enumeration
-    if user and user.hashed_password:
+    if user:
         token = secrets.token_urlsafe(32)
         user.reset_token = token
         user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)

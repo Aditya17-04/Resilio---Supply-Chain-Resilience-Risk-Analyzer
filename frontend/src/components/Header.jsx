@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation, useNavigate, Link } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { alerts } from '../data/dummyData'
 
 const pageTitles = {
@@ -95,22 +95,6 @@ export default function Header() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Auth links */}
-      <div className="flex items-center gap-2">
-        <Link
-          to="/signin"
-          className="text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-slate-700/60 transition-all duration-200"
-        >
-          Sign In
-        </Link>
-        <Link
-          to="/signup"
-          className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm shadow-blue-600/30"
-        >
-          Sign Up
-        </Link>
       </div>
 
       {/* Date */}

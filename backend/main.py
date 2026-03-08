@@ -1,29 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import suppliers, risk, alerts, simulation, copilot, auth
-from database import engine, SessionLocal
+from database import engine
 import models
-import bcrypt
 
 models.Base.metadata.create_all(bind=engine)
-
-# Seed demo account on first run
-def _seed_demo():
-    db = SessionLocal()
-    try:
-        if not db.query(models.User).filter(models.User.email == "demo@resilio.ai").first():
-            db.add(models.User(
-                name="Demo User",
-                email="demo@resilio.ai",
-                company="Resilio",
-                hashed_password=bcrypt.hashpw(b"Demo@1234", bcrypt.gensalt()).decode(),
-                is_google=False,
-            ))
-            db.commit()
-    finally:
-        db.close()
-
-_seed_demo()
 
 app = FastAPI(
     title="Resilio — Supply Chain Resilience & Risk Analyzer API",

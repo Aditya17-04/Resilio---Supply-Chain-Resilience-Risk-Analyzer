@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Mail, Lock, Shield, Globe, Activity, AlertTriangle, ChevronRight, Zap } from 'lucide-react'
+import { Mail, Lock, Shield, Globe, Activity, AlertTriangle, ChevronRight } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import { useGoogleLogin } from '@react-oauth/google'
 import WorldMapBackground from '../components/auth/WorldMapBackground'
@@ -31,7 +31,6 @@ export default function SignIn() {
     const location = useLocation()
     const { login } = useAuth()
     const [form, setForm] = useState({ email: '', password: '' })
-    const [remember, setRemember] = useState(false)
     const [loading, setLoading] = useState(false)
     const [errors, setErrors] = useState({})
 
@@ -85,14 +84,6 @@ export default function SignIn() {
         }
     }
 
-    function handleDemo() {
-        setForm({ email: 'demo@resilio.ai', password: 'Demo@1234' })
-        toast('Demo credentials filled!', {
-            icon: '⚡',
-            style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(59,130,246,0.3)' },
-        })
-    }
-
     const googleEnabled = !!import.meta.env.VITE_GOOGLE_CLIENT_ID
 
     const handleGoogleLogin = useGoogleLogin({
@@ -102,7 +93,17 @@ export default function SignIn() {
                     headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
                 })
                 const profile = await res.json()
-                login({ email: profile.email, name: profile.name, picture: profile.picture })
+
+                // Persist the Google user in the backend DB
+                const backendRes = await fetch('/api/auth/google-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: profile.email, name: profile.name, picture: profile.picture || '' }),
+                })
+                const backendData = await backendRes.json()
+                if (!backendRes.ok) throw new Error(backendData.detail || 'Google login failed')
+
+                login({ email: profile.email, name: profile.name, picture: profile.picture, company: backendData.user?.company || '' })
                 toast.success(`Welcome, ${profile.name}!`, {
                     style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(59,130,246,0.3)' },
                     iconTheme: { primary: '#3b82f6', secondary: '#fff' },
@@ -257,17 +258,8 @@ export default function SignIn() {
                                 autoComplete="current-password"
                             />
 
-                            {/* Remember + Forgot */}
-                            <div className="flex items-center justify-between">
-                                <label className="flex items-center gap-2 cursor-pointer group">
-                                    <input
-                                        type="checkbox"
-                                        checked={remember}
-                                        onChange={e => setRemember(e.target.checked)}
-                                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 accent-blue-500"
-                                    />
-                                    <span className="text-xs text-slate-400 group-hover:text-slate-300 transition-colors">Remember me</span>
-                                </label>
+                            {/* Forgot password */}
+                            <div className="flex justify-end">
                                 <button
                                     type="button"
                                     className="text-xs text-blue-400 hover:text-blue-300 transition-colors"

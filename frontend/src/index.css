@@ -29,6 +29,16 @@
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-slate-500;
   }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 9999px #1e293b inset !important;
+    box-shadow: 0 0 0 9999px #1e293b inset !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+    caret-color: #f1f5f9;
+  }
 }
 
 @layer components {
