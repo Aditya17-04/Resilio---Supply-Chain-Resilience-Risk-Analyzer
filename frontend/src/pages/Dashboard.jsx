@@ -3,7 +3,17 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
-import { suppliers, alerts, industries, riskTrend, disruptionPredictions, getRiskColor, getRiskLevel } from '../data/dummyData'
+import {
+  suppliers as dummySuppliers,
+  alerts as dummyAlerts,
+  industries,
+  riskTrend as dummyRiskTrend,
+  disruptionPredictions as dummyPredictions,
+  getRiskColor, getRiskLevel,
+} from '../data/dummyData'
+import useApi from '../hooks/useApi'
+import useRealtime from '../hooks/useRealtime'
+import { getSuppliers, getAlerts, getRiskTrend, getRiskPrediction } from '../lib/api'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload?.length) {
@@ -21,11 +31,23 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const highRisk = suppliers.filter(s => s.riskScore >= 70).length
-  const mediumRisk = suppliers.filter(s => s.riskScore >= 40 && s.riskScore < 70).length
-  const lowRisk = suppliers.filter(s => s.riskScore < 40).length
-  const criticalAlerts = alerts.filter(a => a.type === 'CRITICAL' && a.status === 'active').length
-  const avgRisk = Math.round(suppliers.reduce((sum, s) => sum + s.riskScore, 0) / suppliers.length)
+
+  const { data: suppliersData } = useApi(getSuppliers, [])
+  const { data: alertsData }    = useApi(getAlerts,    [])
+  const { data: trendData }     = useApi(getRiskTrend, [])
+  const { data: predData }      = useApi(getRiskPrediction, [])
+  const { data: live, lastUpdated } = useRealtime(60_000)
+
+  const suppliers          = suppliersData?.suppliers           ?? dummySuppliers
+  const alerts             = alertsData?.alerts                  ?? dummyAlerts
+  const riskTrend          = trendData?.trend                    ?? dummyRiskTrend
+  const disruptionPredictions = predData?.predictions            ?? dummyPredictions
+
+  const highRisk      = suppliers.filter(s => s.riskScore >= 70).length
+  const mediumRisk    = suppliers.filter(s => s.riskScore >= 40 && s.riskScore < 70).length
+  const lowRisk       = suppliers.filter(s => s.riskScore < 40).length
+  const criticalAlerts = alerts.filter(a => (a.type === 'CRITICAL' || a.type === 'critical') && a.status === 'active').length
+  const avgRisk       = Math.round(suppliers.reduce((sum, s) => sum + s.riskScore, 0) / suppliers.length)
 
   const riskDist = [
     { name: 'Low', value: lowRisk, color: '#10b981' },
@@ -257,6 +279,83 @@ export default function Dashboard() {
           </button>
         ))}
       </div>
+
+      {/* Live Signals */}
+      {live && (
+        <div className="glass-card p-5 border border-blue-500/20">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+              <h3 className="section-title">Live Signals</h3>
+            </div>
+            <span className="text-xs text-slate-500">
+              {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Updating…'}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            {/* Weather */}
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">⛈ Weather Alerts</div>
+              {(live.weather_alerts?.length === 0 && live.weather_conditions?.length === 0) && (
+                <p className="text-xs text-slate-500">No data available</p>
+              )}
+              {/* Show alerts first, fallback to top 3 current conditions */}
+              {(live.weather_alerts?.length > 0 ? live.weather_alerts : live.weather_conditions?.slice(0, 3) ?? []).map(w => (
+                <div key={w.supplier_id} className="flex items-start gap-2 mb-2">
+                  <span className={`text-xs font-bold mt-0.5 flex-shrink-0 ${w.risk_contribution >= 15 ? 'text-red-400' : w.risk_contribution >= 5 ? 'text-amber-400' : 'text-slate-400'}`}>
+                    {w.risk_contribution > 0 ? `+${w.risk_contribution}` : '\u2014'}
+                  </span>
+                  <div>
+                    <div className="text-xs font-medium text-slate-200">{w.name}</div>
+                    <div className="text-xs text-slate-500">{w.description || w.condition}{w.temp_c != null ? ` · ${Math.round(w.temp_c)}°C` : ''} · {w.country}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Stock movers */}
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">📈 Stock Movers</div>
+              {live.stocks_rate_limited && live.stock_movers?.length === 0 && (
+                <div>
+                  <p className="text-xs text-amber-400/80">Alpha Vantage daily limit reached</p>
+                  <p className="text-xs text-slate-600 mt-0.5">Resets at midnight UTC</p>
+                </div>
+              )}
+              {!live.stocks_rate_limited && live.stock_movers?.length === 0 && (
+                <p className="text-xs text-slate-500">No significant moves (≥2%)</p>
+              )}
+              {live.stock_movers?.slice(0, 3).map(s => (
+                <div key={s.supplier_id} className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-xs font-medium text-slate-200">{s.symbol}</div>
+                    <div className="text-xs text-slate-500">{s.supplier_name}</div>
+                  </div>
+                  <span className={`text-xs font-bold ${s.direction === 'up' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {s.direction === 'up' ? '▲' : '▼'} {Math.abs(s.change_pct).toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+            {/* FX rates */}
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">💱 Key FX Rates (USD)</div>
+              {live.exchange_rates?.available === false && (
+                <p className="text-xs text-slate-500">Rates unavailable</p>
+              )}
+              {live.exchange_rates?.rates && (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  {Object.entries(live.exchange_rates.rates).slice(0, 8).map(([cur, rate]) => (
+                    <div key={cur} className="flex justify-between text-xs">
+                      <span className="text-slate-400">{cur}</span>
+                      <span className="text-slate-200 font-medium">{Number(rate).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,8 +1,28 @@
 import { useState } from 'react'
-import { singlePointsOfFailure, getSupplierById, getRiskColor } from '../data/dummyData'
+import { singlePointsOfFailure as dummySPOF, getSupplierById, getRiskColor } from '../data/dummyData'
+import useApi from '../hooks/useApi'
+import { getSPOF } from '../lib/api'
+
+function mapSpof(s) {
+  return {
+    id: s.id,
+    name: `${s.supplier} — ${s.component}`,
+    description: `${s.product}. Affects ${s.affectedCompanies} companies. Estimated loss: ${s.estimatedLoss}.`,
+    riskScore: s.criticalityScore,
+    industry: s.industryImpact,
+    supplierId: null,
+    affectedProducts: [s.product],
+    annualValue: s.estimatedLoss,
+    alternativesAvailable: s.alternativesCount,
+    mitigationScore: Math.round((100 - s.criticalityScore) * 0.4),
+  }
+}
 
 export default function SinglePointFailure() {
   const [selected, setSelected] = useState(null)
+
+  const { data } = useApi(getSPOF, [])
+  const singlePointsOfFailure = data?.spof?.map(mapSpof) ?? dummySPOF
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Tooltip, LayerGroup } from 'react-leaflet'
-import { heatmapRegions } from '../data/dummyData'
+import { heatmapRegions as dummyHeatmapRegions } from '../data/dummyData'
+import useApi from '../hooks/useApi'
+import { getRiskHeatmap } from '../lib/api'
 
 const getHeatColor = (intensity) => {
   if (intensity >= 0.8) return '#ef4444'
@@ -21,6 +23,9 @@ const getRiskLabel = (intensity) => {
 export default function RiskHeatmap() {
   const [selected, setSelected] = useState(null)
   const [overlayType, setOverlayType] = useState('overall')
+
+  const { data } = useApi(getRiskHeatmap, [])
+  const heatmapRegions = data?.regions ?? dummyHeatmapRegions
 
   const sortedRegions = [...heatmapRegions].sort((a, b) => b.intensity - a.intensity)
 

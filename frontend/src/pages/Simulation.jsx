@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { simulationScenarios, suppliers, supplyChainLinks, getRiskColor } from '../data/dummyData'
+import { simulationScenarios as dummyScenarios, suppliers as dummySuppliers, supplyChainLinks, getRiskColor } from '../data/dummyData'
+import useApi from '../hooks/useApi'
+import { getSimulationScenarios, getSuppliers } from '../lib/api'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload?.length) {
@@ -21,6 +23,11 @@ export default function Simulation() {
   const [customSupplier, setCustomSupplier] = useState('')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
+
+  const { data: scenarioData } = useApi(getSimulationScenarios, [])
+  const { data: supplierData } = useApi(getSuppliers, [])
+  const simulationScenarios = scenarioData?.scenarios ?? dummyScenarios
+  const suppliers = supplierData?.suppliers ?? dummySuppliers
 
   const runSimulation = (scenario) => {
     setRunning(true)

@@ -3,7 +3,9 @@ import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine
 } from 'recharts'
-import { disruptionPredictions, riskTrend, suppliers } from '../data/dummyData'
+import { disruptionPredictions as dummyPredictions } from '../data/dummyData'
+import useApi from '../hooks/useApi'
+import { getRiskPrediction } from '../lib/api'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload?.length) {
@@ -45,6 +47,9 @@ const weeklyForecast = [
 
 export default function DisruptionPrediction() {
   const [selectedIndustry, setSelectedIndustry] = useState('semiconductors')
+
+  const { data: predData } = useApi(getRiskPrediction, [])
+  const disruptionPredictions = predData?.predictions ?? dummyPredictions
 
   const topRiskByIndustry = {
     semiconductors: { prob: 74, label: 'Semiconductors', drivers: ['Taiwan geopolitical tension', 'Typhoon season Q3', 'Rare earth export controls'] },

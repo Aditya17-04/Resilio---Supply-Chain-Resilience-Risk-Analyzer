@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import suppliers, risk, alerts, simulation, copilot, auth
+from routers import suppliers, risk, alerts, simulation, copilot, auth, realtime
 from database import engine
 import models
 
@@ -26,6 +26,7 @@ app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
 app.include_router(simulation.router, prefix="/api/simulation", tags=["Simulation"])
 app.include_router(copilot.router, prefix="/api/copilot", tags=["AI Copilot"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(realtime.router, prefix="/api/realtime", tags=["Real-Time Data"])
 
 
 @app.get("/")

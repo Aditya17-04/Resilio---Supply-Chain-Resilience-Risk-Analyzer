@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { RadialBarChart, RadialBar, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, Tooltip } from 'recharts'
-import { industries, suppliers, getRiskColor } from '../data/dummyData'
+import { industries as dummyIndustries, suppliers as dummySuppliers, getRiskColor } from '../data/dummyData'
+import useApi from '../hooks/useApi'
+import { getRiskIndustries, getSuppliers } from '../lib/api'
 
 const riskConfig = {
   HIGH: { color: '#ef4444', bg: 'bg-red-500/10', border: 'border-red-500/40', text: 'text-red-400', dot: 'bg-red-500' },
@@ -9,22 +11,33 @@ const riskConfig = {
 }
 
 export default function IndustryMonitor() {
-  const [selected, setSelected] = useState(industries[0])
+  const { data: indData } = useApi(getRiskIndustries, [])
+  const { data: supplierData } = useApi(getSuppliers, [])
+
+  // Merge API industries with dummyData to preserve icon/keyRisks fields
+  const industries = (indData?.industries ?? dummyIndustries).map(ind => ({
+    ...(dummyIndustries.find(d => d.id === ind.id) ?? {}),
+    ...ind,
+  }))
+  const suppliers = supplierData?.suppliers ?? dummySuppliers
+
+  const [selected, setSelected] = useState(null)
+  const activeSelected = selected ?? industries[0]
 
   const industrySuppliers = suppliers.filter(s =>
-    s.industry.toLowerCase().includes(selected.id.slice(0, 5).toLowerCase()) ||
-    s.industry.toLowerCase() === selected.name.toLowerCase()
+    s.industry.toLowerCase().includes(activeSelected.id.slice(0, 5).toLowerCase()) ||
+    s.industry.toLowerCase() === activeSelected.name.toLowerCase()
   )
 
   const radarData = [
     { subject: 'Geopolitical', value: Math.round(industrySuppliers.reduce((acc, s) => acc + s.geopoliticalRisk, 0) / (industrySuppliers.length || 1)) },
     { subject: 'Disaster', value: Math.round(industrySuppliers.reduce((acc, s) => acc + s.disasterRisk, 0) / (industrySuppliers.length || 1)) },
     { subject: 'Transport', value: Math.round(industrySuppliers.reduce((acc, s) => acc + s.transportRisk, 0) / (industrySuppliers.length || 1)) },
-    { subject: 'Concentration', value: selected.criticalNodes * 25 },
+    { subject: 'Concentration', value: activeSelected.criticalNodes * 25 },
     { subject: 'Financial', value: 100 - Math.round(industrySuppliers.reduce((acc, s) => acc + s.financialStability, 0) / (industrySuppliers.length || 1)) },
   ]
 
-  const cfg = riskConfig[selected.riskLevel]
+  const cfg = riskConfig[activeSelected.riskLevel]
 
   return (
     <div className="space-y-6">
@@ -32,7 +45,7 @@ export default function IndustryMonitor() {
       <div className="grid grid-cols-5 gap-3">
         {industries.map(ind => {
           const c = riskConfig[ind.riskLevel]
-          const isSelected = selected.id === ind.id
+          const isSelected = activeSelected?.id === ind.id
           return (
             <button
               key={ind.id}
@@ -68,27 +81,27 @@ export default function IndustryMonitor() {
         <div className="col-span-1 glass-card p-5 space-y-5">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-4xl mb-2">{selected.icon}</div>
-              <h2 className="text-xl font-bold text-white">{selected.name}</h2>
-              <div className={`text-sm font-bold ${cfg.text} mt-1`}>{selected.riskLevel} RISK</div>
+              <div className="text-4xl mb-2">{activeSelected.icon}</div>
+              <h2 className="text-xl font-bold text-white">{activeSelected.name}</h2>
+              <div className={`text-sm font-bold ${cfg.text} mt-1`}>{activeSelected.riskLevel} RISK</div>
             </div>
             <div className={`px-4 py-3 rounded-xl ${cfg.bg} border ${cfg.border} text-center`}>
-              <div className="text-3xl font-black" style={{ color: cfg.color }}>{selected.riskScore}</div>
+              <div className="text-3xl font-black" style={{ color: cfg.color }}>{activeSelected.riskScore}</div>
               <div className="text-xs text-slate-500">Score</div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-slate-700/30 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-blue-400">{selected.supplierCount}</div>
+              <div className="text-xl font-bold text-blue-400">{activeSelected.supplierCount}</div>
               <div className="text-xs text-slate-500">Suppliers</div>
             </div>
             <div className="bg-slate-700/30 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold text-red-400">{selected.criticalNodes}</div>
+              <div className="text-xl font-bold text-red-400">{activeSelected.criticalNodes}</div>
               <div className="text-xs text-slate-500">Critical Nodes</div>
             </div>
             <div className="bg-slate-700/30 rounded-lg p-3 text-center col-span-2">
-              <div className="text-xl font-bold text-emerald-400">{selected.gdpImpact}</div>
+              <div className="text-xl font-bold text-emerald-400">{activeSelected.gdpImpact}</div>
               <div className="text-xs text-slate-500">Annual GDP Impact</div>
             </div>
           </div>
@@ -96,7 +109,7 @@ export default function IndustryMonitor() {
           <div>
             <div className="text-xs font-semibold text-slate-400 mb-2">Key Risk Factors:</div>
             <div className="space-y-1.5">
-              {selected.keyRisks.map((risk, i) => (
+              {activeSelected.keyRisks?.map((risk, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs">
                   <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`}></div>
                   <span className="text-slate-300">{risk}</span>
@@ -108,7 +121,7 @@ export default function IndustryMonitor() {
 
         {/* Radar Chart */}
         <div className="glass-card p-5">
-          <h3 className="section-title mb-4">Risk Profile — {selected.name}</h3>
+          <h3 className="section-title mb-4">Risk Profile — {activeSelected.name}</h3>
           <ResponsiveContainer width="100%" height={280}>
             <RadarChart data={radarData}>
               <PolarGrid stroke="#1e293b" />
@@ -124,10 +137,10 @@ export default function IndustryMonitor() {
 
         {/* Supplier list for industry */}
         <div className="glass-card p-5">
-          <h3 className="section-title mb-4">Suppliers — {selected.name}</h3>
+          <h3 className="section-title mb-4">Suppliers — {activeSelected.name}</h3>
           <div className="space-y-3">
             {suppliers
-              .filter(s => s.industry === selected.name || selected.name.includes(s.industry.split(' ')[0]))
+              .filter(s => s.industry === activeSelected.name || activeSelected.name.includes(s.industry.split(' ')[0]))
               .sort((a, b) => b.riskScore - a.riskScore)
               .slice(0, 6)
               .map(s => (

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { copilotResponses, suppliers, industries, alerts } from '../data/dummyData'
+import { queryCopilot } from '../lib/api'
 
 const INITIAL_MESSAGE = {
   id: 0,
@@ -80,9 +81,25 @@ export default function Copilot() {
     setInput('')
     setLoading(true)
 
-    await new Promise(r => setTimeout(r, 800 + Math.random() * 1200))
+    let response
+    try {
+      const apiRes = await queryCopilot(query)
+      const r = apiRes.response
+      let text = `**${r.topic}**\n\n${r.summary}\n\n`
+      if (r.key_risks?.length) {
+        text += `**Key Risks:**\n`
+        r.key_risks.forEach(k => { text += `• ${k}\n` })
+      }
+      if (r.recommendations?.length) {
+        text += `\n**Recommended Actions:**\n`
+        r.recommendations.forEach((rec, i) => { text += `${i + 1}. ${rec}\n` })
+      }
+      if (r.disruption_probability) text += `\n**Predicted Disruption Probability: ${r.disruption_probability}%**`
+      response = text.trim()
+    } catch {
+      response = getAIResponse(query)
+    }
 
-    const response = getAIResponse(query)
     const aiMsg = { id: Date.now() + 1, role: 'ai', content: response, timestamp: new Date() }
     setMessages(prev => [...prev, aiMsg])
     setLoading(false)

@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { alerts } from '../data/dummyData'
+import { alerts as dummyAlerts } from '../data/dummyData'
+import useApi from '../hooks/useApi'
+import { getAlerts } from '../lib/api'
 
 const typeConfig = {
   CRITICAL: { color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/40', borderL: 'border-l-red-500', dot: 'bg-red-500', icon: '🔴' },
@@ -27,6 +29,9 @@ export default function Alerts() {
   const [filter, setFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [selected, setSelected] = useState(null)
+
+  const { data } = useApi(getAlerts, [])
+  const alerts = data?.alerts ?? dummyAlerts
 
   const filtered = alerts
     .filter(a => filter === 'all' || a.status === filter)
