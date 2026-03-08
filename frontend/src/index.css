@@ -1,0 +1,215 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans antialiased;
+    margin: 0;
+    padding: 0;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-600 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-500;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 rounded-xl;
+  }
+
+  .risk-badge-low {
+    @apply bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  .risk-badge-medium {
+    @apply bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  .risk-badge-high {
+    @apply bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm;
+  }
+
+  .btn-secondary {
+    @apply bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 text-sm border border-slate-600;
+  }
+
+  .input-field {
+    @apply bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-700/60 transition-all duration-200 cursor-pointer;
+  }
+
+  .nav-item.active {
+    @apply text-white bg-blue-600/20 border border-blue-500/30;
+  }
+
+  .stat-card {
+    @apply glass-card p-5 flex flex-col gap-2;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold text-white;
+  }
+
+  .section-title {
+    @apply text-lg font-semibold text-slate-200;
+  }
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  background: #0f172a !important;
+  @apply rounded-xl;
+}
+
+.leaflet-tile {
+  filter: brightness(0.7) saturate(0.8) hue-rotate(190deg);
+}
+
+.custom-marker {
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.custom-marker:hover {
+  transform: scale(1.3);
+}
+
+/* D3 Graph styles */
+.node circle {
+  transition: r 0.2s;
+}
+
+.node:hover circle {
+  r: 12;
+}
+
+.link {
+  stroke-opacity: 0.4;
+}
+
+/* Animations */
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+}
+
+.pulse-ring {
+  animation: pulseRing 2s ease-in-out infinite;
+}
+
+@keyframes pulseRing {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+/* Chat styles */
+.chat-bubble-user {
+  @apply bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%] text-sm leading-relaxed ml-auto;
+}
+
+.chat-bubble-ai {
+  @apply bg-slate-700 text-slate-200 rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[85%] text-sm leading-relaxed;
+}
+
+/* Table styles */
+.data-table {
+  @apply w-full text-sm;
+}
+
+.data-table th {
+  @apply text-left text-xs font-semibold text-slate-400 uppercase tracking-wider py-3 px-4 border-b border-slate-700/60;
+}
+
+.data-table td {
+  @apply py-3 px-4 border-b border-slate-700/30 text-slate-300;
+}
+
+.data-table tr:hover td {
+  @apply bg-slate-700/20;
+}
+
+/* Progress bar */
+.risk-bar {
+  @apply rounded-full h-2 relative overflow-hidden bg-slate-700;
+}
+
+.risk-bar-fill {
+  @apply h-full rounded-full transition-all duration-1000 ease-out;
+}
+
+/* Heatmap canvas */
+.heatmap-overlay {
+  opacity: 0.75;
+}
+
+/* Auth page — styled native select */
+select option {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+select:invalid {
+  color: #475569;
+}
+
+/* Auth right panel smooth scroll */
+.auth-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
+}
