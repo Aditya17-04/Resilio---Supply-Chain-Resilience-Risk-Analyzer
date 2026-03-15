@@ -474,7 +474,7 @@ export const copilotResponses = {
   },
   default: {
     keywords: [],
-    response: `**Supply Chain Copilot Ready**\n\nI can analyze your supply chain for:\n\n• 🔍 **Risk Assessment** — "Which suppliers are highest risk?"\n• ⚡ **Disruption Prediction** — "What could disrupt semiconductor supply?"\n• 🏭 **Industry Analysis** — "Analyze pharmaceutical supply chain"\n• 🗺 **Geographic Risk** — "What risks exist in Asia?"\n• 🔗 **Dependencies** — "Find hidden dependencies for automotive"\n• 🛡 **Mitigation** — "How can I reduce energy supply risk?"\n\nType any question to begin analysis.`,
+    response: `Start The Conversation`,
   },
 };
 
