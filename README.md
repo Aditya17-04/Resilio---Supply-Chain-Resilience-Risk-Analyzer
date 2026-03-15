@@ -210,6 +210,10 @@ ALPHA_VANTAGE_KEY=your_key      # https://www.alphavantage.co/support/#api-key
 OPENWEATHER_KEY=your_key        # https://openweathermap.org/api
 EXCHANGERATE_KEY=your_key       # https://www.exchangerate-api.com
 COMTRADE_KEY=your_key           # https://comtradeplus.un.org
+
+# ── AI Copilot (Groq) ───────────────────────────────────────────────
+GROQ_API_KEY=your_groq_api_key  # https://console.groq.com/keys
+GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
 > **Note:** Alpha Vantage free tier allows 25 requests/day. Each dashboard load fetches 8 stock quotes. The API response is cached for 5 minutes to minimize consumption.

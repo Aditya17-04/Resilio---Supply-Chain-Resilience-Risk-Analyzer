@@ -87,6 +87,9 @@ export default function SignIn() {
     const googleEnabled = !!import.meta.env.VITE_GOOGLE_CLIENT_ID
 
     const handleGoogleLogin = useGoogleLogin({
+        flow: 'implicit',
+        ux_mode: 'popup',
+        scope: 'openid email profile',
         onSuccess: async (tokenResponse) => {
             try {
                 const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -117,7 +120,12 @@ export default function SignIn() {
             }
         },
         onError: () => {
-            toast.error('Google sign-in was cancelled or failed.', {
+            toast.error(`Google sign-in failed. Verify Google OAuth Authorized JavaScript origins include ${window.location.origin}`, {
+                style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
+            })
+        },
+        onNonOAuthError: () => {
+            toast.error(`Google sign-in failed. Verify OAuth client config for origin ${window.location.origin}`, {
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
             })
         },

@@ -49,6 +49,60 @@ export const queryCopilot = (query, context) =>
     body: JSON.stringify({ query, context }),
   })
 
+export const queryCopilotStream = async (query, context, handlers = {}) => {
+  const { onToken, onDone } = handlers
+  const res = await fetch(`${BASE}/api/copilot/query/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, context }),
+  })
+
+  if (!res.ok || !res.body) {
+    throw new Error(`API /api/copilot/query/stream → ${res.status}`)
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    const events = buffer.split('\n\n')
+    buffer = events.pop() || ''
+
+    for (const event of events) {
+      const lines = event.split('\n')
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue
+        const payloadText = line.slice(5).trim()
+        if (!payloadText) continue
+
+        let payload
+        try {
+          payload = JSON.parse(payloadText)
+        } catch {
+          continue
+        }
+
+        if (payload.error) {
+          throw new Error(payload.error)
+        }
+
+        if (payload.token && onToken) {
+          onToken(payload.token)
+        }
+
+        if (payload.done && onDone) {
+          onDone()
+        }
+      }
+    }
+  }
+}
+
 // ── Realtime ──────────────────────────────────────────────────────────────────
 export const getRealtimeDashboard = () => fetchJSON('/api/realtime/dashboard')
 export const getRealtimeWeather = () => fetchJSON('/api/realtime/weather')

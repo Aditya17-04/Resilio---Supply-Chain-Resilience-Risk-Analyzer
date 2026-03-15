@@ -1,12 +1,74 @@
 import { useState, useRef, useEffect } from 'react'
 import { copilotResponses, suppliers, industries, alerts } from '../data/dummyData'
-import { queryCopilot } from '../lib/api'
+import { queryCopilot, queryCopilotStream } from '../lib/api'
 
-const INITIAL_MESSAGE = {
-  id: 0,
-  role: 'ai',
-  content: copilotResponses.default.response,
-  timestamp: new Date(),
+const CHAT_STORAGE_KEY = 'resilio_copilot_chats_v1'
+const ACTIVE_CHAT_STORAGE_KEY = 'resilio_copilot_active_chat_v1'
+const COPILOT_STARTER_TEXT = 'Start The Conversation'
+
+function isLegacyStarterMessage(text) {
+  if (typeof text !== 'string') return false
+  const normalized = text.trim().toLowerCase()
+  return (
+    normalized === 'start the converstaion' ||
+    normalized === 'start the conversation' ||
+    normalized.includes('supply chain copilot ready')
+  )
+}
+
+function createInitialMessage() {
+  return {
+    id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    role: 'ai',
+    content: COPILOT_STARTER_TEXT,
+    timestamp: new Date().toISOString(),
+  }
+}
+
+function createConversation(title = 'New Chat') {
+  const now = new Date().toISOString()
+  return {
+    id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    title,
+    createdAt: now,
+    updatedAt: now,
+    messages: [createInitialMessage()],
+  }
+}
+
+function hydrateConversations(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(item => item && item.id && Array.isArray(item.messages))
+    .map(item => ({
+      ...item,
+      title: item.title || 'New Chat',
+      createdAt: item.createdAt || new Date().toISOString(),
+      updatedAt: item.updatedAt || new Date().toISOString(),
+      messages: item.messages.map((msg, index) => {
+        const normalizedContent = index === 0 && msg?.role === 'ai' && isLegacyStarterMessage(msg?.content)
+          ? COPILOT_STARTER_TEXT
+          : msg?.content
+
+        return {
+          ...msg,
+          content: normalizedContent,
+          timestamp: typeof msg.timestamp === 'string' ? msg.timestamp : new Date().toISOString(),
+        }
+      }),
+    }))
+}
+
+function buildChatTitle(query) {
+  const clean = query.trim().replace(/\s+/g, ' ')
+  if (!clean) return 'New Chat'
+  return clean.length > 42 ? `${clean.slice(0, 42)}...` : clean
+}
+
+function formatTime(value) {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '--:--'
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -18,91 +80,197 @@ const SUGGESTED_QUESTIONS = [
   'What is the risk level for energy supply?',
 ]
 
+const SECTION_HEADING_RE = /^\*{0,2}(Summary|Key Insights|Recommendations)\s*[—\-]\*{0,2}\s*$/i
+
 function formatMessage(text) {
   const lines = text.split('\n')
   return lines.map((line, i) => {
-    if (line.startsWith('**') && line.endsWith('**')) {
-      return <div key={i} className="font-bold text-slate-200 mt-2 mb-1">{line.replace(/\*\*/g, '')}</div>
+    const trimmed = line.trim()
+    // Bold section headings: **Summary —** or plain Summary —
+    if (SECTION_HEADING_RE.test(trimmed)) {
+      const label = trimmed.replace(/\*\*/g, '').trim()
+      return <div key={i} className="font-bold text-white text-sm mt-4 mb-2">{label}</div>
+    }
+    if (trimmed.startsWith('**') && trimmed.endsWith('**')) {
+      return <div key={i} className="font-bold text-white text-sm mt-3 mb-1">{trimmed.replace(/\*\*/g, '')}</div>
     }
     if (line.startsWith('• ')) {
-      return <div key={i} className="flex items-start gap-2 text-slate-300 my-0.5"><span className="text-blue-400 mt-0.5">•</span><span>{line.slice(2)}</span></div>
+      return <div key={i} className="flex items-start gap-2 text-slate-300 my-1"><span className="text-blue-400 mt-0.5">•</span><span>{line.slice(2)}</span></div>
     }
-    if (line.startsWith('🔴') || line.startsWith('🟡') || line.startsWith('🟢') || line.startsWith('⚠') || line.startsWith('1.') || line.startsWith('2.') || line.startsWith('3.')) {
-      return <div key={i} className="my-0.5 text-slate-300">{line}</div>
+    if (/^-\s/.test(line)) {
+      return <div key={i} className="flex items-start gap-2 text-slate-300 my-1"><span className="text-blue-400 mt-0.5">•</span><span>{line.slice(2)}</span></div>
     }
-    if (line === '') return <div key={i} className="h-1"></div>
-    return <div key={i} className="text-slate-300">{line}</div>
+    if (line.startsWith('🔴') || line.startsWith('🟡') || line.startsWith('🟢') || line.startsWith('⚠') || /^\d+\./.test(line)) {
+      return <div key={i} className="my-1 text-slate-300">{line}</div>
+    }
+    if (line === '') return <div key={i} className="h-2"></div>
+    return <div key={i} className="text-slate-300 leading-relaxed">{line}</div>
   })
 }
 
-function getAIResponse(query) {
-  const q = query.toLowerCase()
-
-  if (q.includes('semiconductor') || q.includes('chip') || q.includes('tsmc') || q.includes('taiwan')) {
-    return copilotResponses.semiconductor.response
-  }
-  if (q.includes('pharma') || q.includes('medicine') || q.includes('drug') || q.includes('api')) {
-    return copilotResponses.pharma.response
-  }
-  if (q.includes('risk') || q.includes('highest') || q.includes('dangerous')) {
-    return copilotResponses.risk.response
-  }
-  if (q.includes('energy') || q.includes('oil') || q.includes('gas') || q.includes('cobalt')) {
-    return `**Energy Supply Chain Analysis:**\n\n🔴 **Critical Risk Detected**\n\n• **Gazprom Pipeline** (Russia) — Risk Score: 92/100. Active sanctions and conflict create extreme gas supply risk for Europe.\n\n• **Cobalt Congo** (DRC) — Risk Score: 95/100. 70% of global cobalt supply from politically unstable region. Critical for EV batteries.\n\n• **Saudi Aramco** (Saudi Arabia) — Risk Score: 58/100. Geopolitical tension in Middle East creates oil supply variability.\n\n**Recommended Actions:**\n1. Accelerate renewable energy transition\n2. Diversify cobalt sourcing to Zambia and battery recycling\n3. Build 6-month strategic petroleum reserve\n\n**Predicted Disruption Risk Next 4 Weeks: 82%**`
-  }
-  if (q.includes('automotive') || q.includes('car') || q.includes('vehicle') || q.includes('battery')) {
-    return `**Automotive Supply Chain Analysis:**\n\n🟡 **Elevated Risk Detected**\n\n• **CATL Battery** (China) — Risk Score: 68/100. EV battery production concentrated in China. Geopolitical risk elevated.\n\n• **Lithium Americas** (Argentina) — Risk Score: 75/100. Critical lithium supply with water scarcity and political risk.\n\n• **Toyota Supply Hub** (Japan) — Risk Score: 32/100 — Strong diversification, low risk.\n\n**Supply Chain Depth:** OEM → Battery System (China) → Lithium Mining (Argentina/DRC)\n\n**Recommended Actions:**\n1. Invest in North American lithium projects\n2. Develop battery recycling programs\n3. Dual-source battery cells between CATL and Korean suppliers\n\n**Predicted Disruption Risk Next 4 Weeks: 55%**`
-  }
-  if (q.includes('food') || q.includes('agriculture') || q.includes('wheat') || q.includes('grain')) {
-    return `**Food & Agriculture Supply Chain Analysis:**\n\n🔴 **Critical Risk Detected**\n\n• **Ukraine Wheat** — Risk Score: 88/100. Active conflict zone. Ukraine exports 10% of global wheat. Black Sea corridor disruptions ongoing.\n\n• **Cargill Grain** (USA) — Risk Score: 25/100 — Stable, but climate exposure increasing.\n\n**Current Situation:**\n- Global wheat prices elevated 40% from pre-conflict baseline\n- 2.3M tonnes delayed in Black Sea ports\n- El Niño pattern threatens 2024-25 grain harvests\n\n**Recommended Actions:**\n1. Diversify grain sourcing to Canada, Australia, Argentina\n2. Build 90-day food commodity reserves\n3. Monitor Black Sea shipping corridor daily\n\n**Predicted Disruption Risk Next 4 Weeks: 70%**`
-  }
-  if (q.includes('alert') || q.includes('urgent') || q.includes('emergency')) {
-    const active = alerts.filter(a => a.status === 'active')
-    return `**Active Alert Summary (${active.length} Active):**\n\n${active.map(a => `🔴 **${a.type}** - ${a.title}\n   ${a.supplier} · ${a.probability}% probability · ${a.affectedVolume} exposure`).join('\n\n')}\n\n**Highest Priority:** ${active[0]?.title}\n\n**Immediate Action Required for:** ${active.filter(a => a.type === 'CRITICAL').length} critical alerts`
-  }
-
-  return `**Analysis Complete**\n\nI analyzed your query: "${query}"\n\nHere's what I found based on your supply chain data:\n\n• **${suppliers.filter(s => s.riskScore >= 70).length} high-risk suppliers** currently need monitoring\n• **Global risk level:** ELEVATED (70/100)\n• **Most urgent concern:** Taiwan geopolitical risk affecting semiconductor supply\n\nTry asking about specific industries:\n• "Analyze semiconductor supply risks"\n• "What are the food supply chain risks?"\n• "Show me the highest risk suppliers"\n• "What alerts need immediate attention?"`
-}
-
 export default function Copilot() {
-  const [messages, setMessages] = useState([INITIAL_MESSAGE])
+  const [conversations, setConversations] = useState(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) || '[]')
+      const hydrated = hydrateConversations(parsed)
+      if (hydrated.length) return hydrated
+    } catch {
+      // ignore parse errors and fallback to default chat
+    }
+    return [createConversation('New Chat')]
+  })
+  const [activeConversationId, setActiveConversationId] = useState(() => localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY) || null)
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loadingConversationId, setLoadingConversationId] = useState(null)
   const messagesEndRef = useRef(null)
+
+  const orderedConversations = [...conversations].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+  const activeConversation = conversations.find(c => c.id === activeConversationId) || orderedConversations[0] || null
+  const messages = activeConversation?.messages || []
+  const loading = activeConversation ? loadingConversationId === activeConversation.id : false
+
+  useEffect(() => {
+    if (!activeConversation && conversations.length > 0) {
+      setActiveConversationId(conversations[0].id)
+    }
+  }, [activeConversation, conversations])
+
+  useEffect(() => {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(conversations))
+  }, [conversations])
+
+  useEffect(() => {
+    if (activeConversationId) {
+      localStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, activeConversationId)
+    }
+  }, [activeConversationId])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const send = async (query) => {
-    if (!query.trim() || loading) return
-    const userMsg = { id: Date.now(), role: 'user', content: query, timestamp: new Date() }
-    setMessages(prev => [...prev, userMsg])
-    setInput('')
-    setLoading(true)
+  const upsertMessage = (conversationId, messageId, content) => {
+    setConversations(prev => prev.map(chat => {
+      if (chat.id !== conversationId) return chat
+      const exists = chat.messages.some(m => m.id === messageId)
+      const nextMessages = exists
+        ? chat.messages.map(m => (m.id === messageId ? { ...m, content } : m))
+        : [...chat.messages, { id: messageId, role: 'ai', content, timestamp: new Date().toISOString() }]
 
-    let response
+      return {
+        ...chat,
+        messages: nextMessages,
+        updatedAt: new Date().toISOString(),
+      }
+    }))
+  }
+
+  const startNewChat = () => {
+    const next = createConversation('New Chat')
+    setConversations(prev => [next, ...prev])
+    setActiveConversationId(next.id)
+    setInput('')
+  }
+
+  const deleteChat = (conversationId) => {
+    setConversations(prev => {
+      const remaining = prev.filter(chat => chat.id !== conversationId)
+      if (remaining.length === 0) {
+        const replacement = createConversation('New Chat')
+        setActiveConversationId(replacement.id)
+        return [replacement]
+      }
+      if (conversationId === activeConversationId) {
+        setActiveConversationId(remaining[0].id)
+      }
+      return remaining
+    })
+  }
+
+  const clearActiveConversation = () => {
+    if (!activeConversation) return
+    setConversations(prev => prev.map(chat => {
+      if (chat.id !== activeConversation.id) return chat
+      return {
+        ...chat,
+        messages: [createInitialMessage()],
+        updatedAt: new Date().toISOString(),
+      }
+    }))
+  }
+
+  const send = async (query) => {
+    if (!query.trim() || loadingConversationId || !activeConversation) return
+
+    const conversationId = activeConversation.id
+    const userMsg = {
+      id: `m_${Date.now()}_u`,
+      role: 'user',
+      content: query,
+      timestamp: new Date().toISOString(),
+    }
+    const aiMsgId = `m_${Date.now()}_a`
+
+    setConversations(prev => prev.map(chat => {
+      if (chat.id !== conversationId) return chat
+      const shouldRetitle = chat.title === 'New Chat' || chat.messages.length <= 1
+      return {
+        ...chat,
+        title: shouldRetitle ? buildChatTitle(query) : chat.title,
+        messages: [...chat.messages, userMsg],
+        updatedAt: new Date().toISOString(),
+      }
+    }))
+
+    setInput('')
+    setLoadingConversationId(conversationId)
+
+    let streamedContent = ''
     try {
-      const apiRes = await queryCopilot(query)
-      const r = apiRes.response
-      let text = `**${r.topic}**\n\n${r.summary}\n\n`
-      if (r.key_risks?.length) {
-        text += `**Key Risks:**\n`
-        r.key_risks.forEach(k => { text += `• ${k}\n` })
+      upsertMessage(conversationId, aiMsgId, '')
+      await queryCopilotStream(query, undefined, {
+        onToken: (token) => {
+          streamedContent += token
+          upsertMessage(conversationId, aiMsgId, streamedContent)
+        },
+      })
+
+      if (!streamedContent.trim()) {
+        const apiRes = await queryCopilot(query)
+        let response
+        if (apiRes?.response_text) {
+          response = apiRes.response_text
+        } else {
+          const r = apiRes.response
+          let text = `**${r.topic}**\n\n${r.summary}\n\n`
+          if (r.key_risks?.length) {
+            text += `**Key Risks:**\n`
+            r.key_risks.forEach(k => { text += `• ${k}\n` })
+          }
+          if (r.recommendations?.length) {
+            text += `\n**Recommended Actions:**\n`
+            r.recommendations.forEach((rec, i) => { text += `${i + 1}. ${rec}\n` })
+          }
+          if (r.disruption_probability) text += `\n**Predicted Disruption Probability: ${r.disruption_probability}%**`
+          response = text.trim()
+        }
+        upsertMessage(conversationId, aiMsgId, response)
       }
-      if (r.recommendations?.length) {
-        text += `\n**Recommended Actions:**\n`
-        r.recommendations.forEach((rec, i) => { text += `${i + 1}. ${rec}\n` })
-      }
-      if (r.disruption_probability) text += `\n**Predicted Disruption Probability: ${r.disruption_probability}%**`
-      response = text.trim()
     } catch {
-      response = getAIResponse(query)
+      try {
+        const apiRes = await queryCopilot(query)
+        const response = apiRes?.response_text || 'I could not generate a response right now. Please try again.'
+        upsertMessage(conversationId, aiMsgId, response)
+      } catch {
+        upsertMessage(
+          conversationId,
+          aiMsgId,
+          'I’m having trouble reaching the AI service right now. Please check that the backend is running and try again.'
+        )
+      }
     }
 
-    const aiMsg = { id: Date.now() + 1, role: 'ai', content: response, timestamp: new Date() }
-    setMessages(prev => [...prev, aiMsg])
-    setLoading(false)
+    setLoadingConversationId(null)
   }
 
   const handleKeyDown = (e) => {
@@ -121,9 +289,10 @@ export default function Copilot() {
         </div>
         <div>
           <h2 className="font-bold text-white">Supply Chain Copilot</h2>
-          <p className="text-xs text-slate-400">AI-powered supply chain intelligence — Ask anything about your global supply network</p>
+          <p className="text-xs text-slate-400">{activeConversation?.title || 'AI-powered supply chain intelligence'}</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <button onClick={startNewChat} className="btn-secondary text-xs px-3 py-1.5">+ New Chat</button>
           <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
           <span className="text-xs text-slate-500">Online</span>
         </div>
@@ -151,7 +320,7 @@ export default function Copilot() {
                     {msg.role === 'ai' ? formatMessage(msg.content) : msg.content}
                   </div>
                   <div className="text-xs opacity-50 mt-1.5">
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatTime(msg.timestamp)}
                   </div>
                 </div>
               </div>
@@ -197,7 +366,42 @@ export default function Copilot() {
         </div>
 
         {/* Sidebar */}
-        <div className="w-64 space-y-3 flex-shrink-0">
+        <div className="w-72 space-y-3 flex-shrink-0">
+          {/* Chats */}
+          <div className="glass-card p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Chats</h4>
+              <button onClick={startNewChat} className="text-xs text-blue-400 hover:text-blue-300">New</button>
+            </div>
+            <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+              {orderedConversations.map(chat => (
+                <div
+                  key={chat.id}
+                  className={`group flex items-center gap-2 rounded-lg border px-2.5 py-2 transition-all ${
+                    activeConversation?.id === chat.id
+                      ? 'bg-slate-700/50 border-slate-600'
+                      : 'bg-slate-800/40 border-slate-700/40 hover:bg-slate-700/30'
+                  }`}
+                >
+                  <button
+                    onClick={() => setActiveConversationId(chat.id)}
+                    className="flex-1 text-left min-w-0"
+                  >
+                    <div className="text-xs text-slate-200 truncate">{chat.title}</div>
+                    <div className="text-[11px] text-slate-500">{formatTime(chat.updatedAt)}</div>
+                  </button>
+                  <button
+                    onClick={() => deleteChat(chat.id)}
+                    className="text-slate-500 hover:text-red-400 text-xs opacity-80 group-hover:opacity-100"
+                    title="Delete chat"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Suggested Questions */}
           <div className="glass-card p-4 space-y-2">
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Suggested Questions</h4>
@@ -235,7 +439,7 @@ export default function Copilot() {
 
           {/* Clear chat */}
           <button
-            onClick={() => setMessages([INITIAL_MESSAGE])}
+            onClick={clearActiveConversation}
             className="w-full btn-secondary justify-center text-xs"
           >
             Clear Conversation
