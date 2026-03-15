@@ -181,10 +181,12 @@ Interactive docs: `http://localhost:8000/docs`
 ```bash
 cd frontend
 npm install
-npm run dev -- --port 3000
+npm run dev -- --port 3001
 ```
 
-The app will be available at `http://localhost:3000`.
+The app will be available at `http://localhost:3001`.
+
+> If port `3001` is occupied on your machine, use any open port and keep `APP_URL` aligned with it.
 
 ---
 
@@ -203,7 +205,7 @@ SMTP_USER=your@email.com
 SMTP_PASSWORD=your_app_password
 
 # The base URL shown in reset-password emails
-APP_URL=http://localhost:3000
+APP_URL=http://localhost:3001
 
 # ── Real-Time Data APIs ─────────────────────────────────────────────
 ALPHA_VANTAGE_KEY=your_key      # https://www.alphavantage.co/support/#api-key
