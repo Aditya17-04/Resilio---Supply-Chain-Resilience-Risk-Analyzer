@@ -3,10 +3,9 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Mail, Lock, Shield, Globe, Activity, AlertTriangle, ChevronRight } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
-import { useGoogleLogin } from '@react-oauth/google'
 import WorldMapBackground from '../components/auth/WorldMapBackground'
 import AuthInput from '../components/auth/AuthInput'
-import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 
 const FEATURES = [
     {
@@ -29,7 +28,6 @@ const FEATURES = [
 export default function SignIn() {
     const navigate = useNavigate()
     const location = useLocation()
-    const { login } = useAuth()
     const [form, setForm] = useState({ email: '', password: '' })
     const [loading, setLoading] = useState(false)
     const [errors, setErrors] = useState({})
@@ -55,21 +53,20 @@ export default function SignIn() {
         if (Object.keys(errs).length) { setErrors(errs); return }
         setLoading(true)
         try {
-            const res = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: form.email, password: form.password }),
+            const { error } = await supabase.auth.signInWithPassword({
+                email: form.email,
+                password: form.password,
             })
-            const data = await res.json()
+
             setLoading(false)
-            if (!res.ok) {
-                setErrors({ password: data.detail || 'Invalid email or password' })
-                toast.error(data.detail || 'Invalid email or password', {
+            if (error) {
+                setErrors({ password: error.message || 'Invalid email or password' })
+                toast.error(error.message || 'Invalid email or password', {
                     style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
                 })
                 return
             }
-            login(data.user)
+
             toast.success('Welcome back! Redirecting…', {
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(59,130,246,0.3)' },
                 iconTheme: { primary: '#3b82f6', secondary: '#fff' },
@@ -78,50 +75,26 @@ export default function SignIn() {
             setTimeout(() => navigate(from, { replace: true }), 1200)
         } catch {
             setLoading(false)
-            toast.error('Network error. Is the backend running?', {
+            toast.error('Unable to sign in right now. Please try again.', {
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
             })
         }
     }
 
-    const googleEnabled = !!import.meta.env.VITE_GOOGLE_CLIENT_ID
+    async function handleGoogleLogin() {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: `${window.location.origin}/`,
+            },
+        })
 
-    const handleGoogleLogin = useGoogleLogin({
-        onSuccess: async (tokenResponse) => {
-            try {
-                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-                })
-                const profile = await res.json()
-
-                // Persist the Google user in the backend DB
-                const backendRes = await fetch('/api/auth/google-login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: profile.email, name: profile.name, picture: profile.picture || '' }),
-                })
-                const backendData = await backendRes.json()
-                if (!backendRes.ok) throw new Error(backendData.detail || 'Google login failed')
-
-                login({ email: profile.email, name: profile.name, picture: profile.picture, company: backendData.user?.company || '' })
-                toast.success(`Welcome, ${profile.name}!`, {
-                    style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(59,130,246,0.3)' },
-                    iconTheme: { primary: '#3b82f6', secondary: '#fff' },
-                })
-                const from = location.state?.from?.pathname || '/'
-                setTimeout(() => navigate(from, { replace: true }), 1000)
-            } catch {
-                toast.error('Google sign-in failed. Please try again.', {
-                    style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
-                })
-            }
-        },
-        onError: () => {
-            toast.error('Google sign-in was cancelled or failed.', {
+        if (error) {
+            toast.error(error.message || 'Google sign-in failed. Please try again.', {
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
             })
-        },
-    })
+        }
+    }
 
     return (
         <div className="min-h-screen flex bg-slate-950">
@@ -303,7 +276,7 @@ export default function SignIn() {
                         <div className="flex flex-col gap-2.5">
                             <button
                                 type="button"
-                                onClick={() => googleEnabled ? handleGoogleLogin() : toast('Set VITE_GOOGLE_CLIENT_ID in .env to enable Google sign-in', { icon: 'ℹ️', style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(59,130,246,0.3)' } })}
+                                onClick={handleGoogleLogin}
                                 className="w-full flex items-center justify-center gap-3 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl py-2.5 text-sm text-slate-300 font-medium transition-all duration-200"
                             >
                                 <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">

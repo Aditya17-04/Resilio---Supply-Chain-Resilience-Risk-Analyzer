@@ -1,30 +1,79 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { supabase } from '../lib/supabaseClient'
 
 const AuthContext = createContext(null)
 
+function mapSupabaseUser(supabaseUser) {
+    if (!supabaseUser) return null
+
+    const metadata = supabaseUser.user_metadata || {}
+    const displayName =
+        metadata.full_name ||
+        metadata.name ||
+        (supabaseUser.email ? supabaseUser.email.split('@')[0] : 'User')
+
+    return {
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        name: displayName,
+        company: metadata.company || '',
+        country: metadata.country || '',
+        role: metadata.role || '',
+        picture: metadata.avatar_url || metadata.picture || '',
+    }
+}
+
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(() => {
-        try {
-            const stored = localStorage.getItem('resilio_user')
-            return stored ? JSON.parse(stored) : null
-        } catch {
-            return null
+    const [session, setSession] = useState(null)
+    const [user, setUser] = useState(null)
+    const [isLoading, setIsLoading] = useState(true)
+
+    useEffect(() => {
+        let mounted = true
+
+        async function initSession() {
+            const { data, error } = await supabase.auth.getSession()
+            if (error) {
+                console.error('Unable to load Supabase session:', error.message)
+            }
+            if (!mounted) return
+
+            const currentSession = data?.session || null
+            setSession(currentSession)
+            setUser(mapSupabaseUser(currentSession?.user))
+            setIsLoading(false)
         }
-    })
 
-    function login(userData) {
-        const payload = userData || { email: 'user@resilio.ai', name: 'User' }
-        localStorage.setItem('resilio_user', JSON.stringify(payload))
-        setUser(payload)
+        initSession()
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+            setSession(nextSession)
+            setUser(mapSupabaseUser(nextSession?.user))
+            setIsLoading(false)
+        })
+
+        return () => {
+            mounted = false
+            subscription.unsubscribe()
+        }
+    }, [])
+
+    async function logout() {
+        const { error } = await supabase.auth.signOut()
+        if (error) {
+            console.error('Unable to sign out from Supabase:', error.message)
+        }
     }
 
-    function logout() {
-        localStorage.removeItem('resilio_user')
-        setUser(null)
-    }
+    const value = useMemo(
+        () => ({ session, user, logout, isAuthenticated: !!user, isLoading }),
+        [session, user, isLoading]
+    )
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     )

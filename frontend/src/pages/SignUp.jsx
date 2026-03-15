@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { User, Mail, Building2, Globe, Briefcase, Lock, Shield, AlertTriangle, Activity, ChevronRight, Info } from 'lucide-react'
+import { User, Mail, Building2, Globe, Briefcase, Lock, Shield, AlertTriangle, Activity, ChevronRight } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
-import { useGoogleLogin } from '@react-oauth/google'
 import WorldMapBackground from '../components/auth/WorldMapBackground'
 import AuthInput from '../components/auth/AuthInput'
 import PasswordStrength from '../components/auth/PasswordStrength'
-import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 
 const FEATURES = [
     { icon: Globe, title: 'Global Supply Chain Network Mapping', desc: 'Real-time visibility across 190+ countries and 50,000+ suppliers' },
@@ -30,7 +29,6 @@ const COUNTRIES = [
 
 export default function SignUp() {
     const navigate = useNavigate()
-    const { login } = useAuth()
     const [form, setForm] = useState({
         name: '', email: '', company: '', country: '', role: '',
         password: '', confirmPassword: '',
@@ -73,22 +71,23 @@ export default function SignUp() {
         }
         setLoading(true)
         try {
-            const res = await fetch('/api/auth/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: form.name,
-                    email: form.email,
-                    company: form.company,
-                    country: form.country,
-                    role: form.role,
-                    password: form.password,
-                }),
+            const { data, error } = await supabase.auth.signUp({
+                email: form.email,
+                password: form.password,
+                options: {
+                    data: {
+                        full_name: form.name,
+                        company: form.company,
+                        country: form.country,
+                        role: form.role,
+                    },
+                    emailRedirectTo: `${window.location.origin}/signin`,
+                },
             })
-            const data = await res.json()
-            if (!res.ok) {
+
+            if (error) {
                 setLoading(false)
-                const msg = data.detail || 'Registration failed'
+                const msg = error.message || 'Registration failed'
                 if (msg.toLowerCase().includes('email')) setErrors({ email: msg })
                 else setErrors({ general: msg })
                 toast.error(msg, {
@@ -96,50 +95,47 @@ export default function SignUp() {
                 })
                 return
             }
+
             setLoading(false)
-            login(data.user)
-            toast.success('Account created! Redirecting to dashboard…', {
-                duration: 3000,
+
+            if (data?.session) {
+                toast.success('Account created! Redirecting to dashboard…', {
+                    duration: 3000,
+                    style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(59,130,246,0.3)' },
+                    iconTheme: { primary: '#22c55e', secondary: '#fff' },
+                })
+                setTimeout(() => navigate('/', { replace: true }), 1500)
+                return
+            }
+
+            toast.success('Account created. Check your email to verify your account, then sign in.', {
+                duration: 4500,
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(59,130,246,0.3)' },
                 iconTheme: { primary: '#22c55e', secondary: '#fff' },
             })
-            setTimeout(() => navigate('/', { replace: true }), 1500)
+            setTimeout(() => navigate('/signin', { replace: true }), 1800)
         } catch {
             setLoading(false)
-            toast.error('Network error. Is the backend running?', {
+            toast.error('Unable to create account right now. Please try again.', {
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
             })
         }
     }
 
-    const googleEnabled = !!import.meta.env.VITE_GOOGLE_CLIENT_ID
+    async function handleGoogleSignUp() {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: `${window.location.origin}/`,
+            },
+        })
 
-    const handleGoogleSignUp = useGoogleLogin({
-        onSuccess: async (tokenResponse) => {
-            try {
-                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-                })
-                const profile = await res.json()
-                login({ email: profile.email, name: profile.name, picture: profile.picture })
-                toast.success(`Welcome, ${profile.name}! Account created.`, {
-                    duration: 3000,
-                    style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(59,130,246,0.3)' },
-                    iconTheme: { primary: '#22c55e', secondary: '#fff' },
-                })
-                setTimeout(() => navigate('/', { replace: true }), 1200)
-            } catch {
-                toast.error('Google sign-up failed. Please try again.', {
-                    style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
-                })
-            }
-        },
-        onError: () => {
-            toast.error('Google sign-up was cancelled or failed.', {
+        if (error) {
+            toast.error(error.message || 'Google sign-up failed. Please try again.', {
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
             })
-        },
-    }) 
+        }
+    }
 
     const selectClass = `
     w-full bg-slate-800/50 border border-slate-700/60 hover:border-slate-600/70
@@ -416,7 +412,7 @@ export default function SignUp() {
                         {/* Google sign-up */}
                         <button
                             type="button"
-                            onClick={() => googleEnabled ? handleGoogleSignUp() : toast('Set VITE_GOOGLE_CLIENT_ID in .env to enable Google sign-up', { icon: 'ℹ️', style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(59,130,246,0.3)' } })}
+                            onClick={handleGoogleSignUp}
                             className="w-full flex items-center justify-center gap-3 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-xl py-2.5 text-sm text-slate-300 font-medium transition-all duration-200"
                         >
                             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">

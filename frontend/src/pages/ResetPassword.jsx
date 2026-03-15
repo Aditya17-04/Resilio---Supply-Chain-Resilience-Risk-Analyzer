@@ -1,16 +1,16 @@
 import { useState } from 'react'
-import { useSearchParams, useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Lock, Shield, CheckCircle, AlertTriangle } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import AuthInput from '../components/auth/AuthInput'
 import PasswordStrength from '../components/auth/PasswordStrength'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 
 export default function ResetPassword() {
-    const [searchParams] = useSearchParams()
     const navigate = useNavigate()
-    const token = searchParams.get('token') || ''
-    const email = searchParams.get('email') || ''
+    const { user, isLoading } = useAuth()
 
     const [form, setForm] = useState({ password: '', confirm: '' })
     const [errors, setErrors] = useState({})
@@ -32,7 +32,7 @@ export default function ResetPassword() {
     async function handleSubmit(e) {
         e.preventDefault()
         if (!validate()) return
-        if (!token || !email) {
+        if (!user) {
             toast.error('Invalid or missing reset link.', {
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
             })
@@ -40,17 +40,16 @@ export default function ResetPassword() {
         }
         setLoading(true)
         try {
-            const res = await fetch('/api/auth/reset-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token, email, new_password: form.password }),
+            const { error } = await supabase.auth.updateUser({
+                password: form.password,
             })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.detail || 'Reset failed')
+            if (error) throw error
+
+            await supabase.auth.signOut()
             setDone(true)
             setTimeout(() => navigate('/signin'), 3000)
         } catch (err) {
-            toast.error(err.message, {
+            toast.error(err.message || 'Reset failed', {
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
             })
         } finally {
@@ -58,7 +57,15 @@ export default function ResetPassword() {
         }
     }
 
-    const invalidLink = !token || !email
+    const invalidLink = !isLoading && !user && !done
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">
+                Validating reset link...
+            </div>
+        )
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-950 px-6">
@@ -90,7 +97,7 @@ export default function ResetPassword() {
                             <div>
                                 <h2 className="text-xl font-bold text-white mb-2">Invalid reset link</h2>
                                 <p className="text-slate-400 text-sm leading-relaxed">
-                                    This reset link is missing required parameters. Please request a new one.
+                                    This reset link is invalid or expired. Please request a new one.
                                 </p>
                             </div>
                             <Link to="/forgot-password" className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors">
@@ -121,7 +128,7 @@ export default function ResetPassword() {
                             <div className="mb-6">
                                 <h2 className="text-2xl font-bold text-white">Set new password</h2>
                                 <p className="text-slate-400 text-sm mt-1">
-                                    Resetting password for <span className="text-slate-200 font-medium">{email}</span>
+                                    Resetting password for <span className="text-slate-200 font-medium">{user?.email}</span>
                                 </p>
                             </div>
 

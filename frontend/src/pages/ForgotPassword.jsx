@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Mail, Shield, ArrowLeft, CheckCircle } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import AuthInput from '../components/auth/AuthInput'
+import { supabase } from '../lib/supabaseClient'
 
 export default function ForgotPassword() {
     const [email, setEmail] = useState('')
@@ -18,16 +19,17 @@ export default function ForgotPassword() {
 
         setLoading(true)
         try {
-            const res = await fetch('/api/auth/forgot-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email }),
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/reset-password`,
             })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.detail || 'Request failed')
+
+            if (error) {
+                throw error
+            }
+
             setSent(true)
         } catch (err) {
-            toast.error(err.message, {
+            toast.error(err.message || 'Unable to send reset email.', {
                 style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid rgba(239,68,68,0.3)' },
             })
         } finally {
